@@ -1,7 +1,7 @@
 package com.codemich.quickpaybank.account.dto;
 
-import com.codemich.quickpayiasupport.account.AccountType;
-import com.codemich.quickpayiasupport.account.Customer;
+import com.codemich.quickpaybank.account.AccountType;
+import com.codemich.quickpaybank.account.Customer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
