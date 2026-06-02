@@ -22,5 +22,8 @@ spring:
       hibernate:
         format_sql: true
 
+notification:
+  url: https://util.devi.tools/api/v2/notify
+
 server:
   port: 8080
