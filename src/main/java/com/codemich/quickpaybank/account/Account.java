@@ -18,6 +18,10 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 10)
+    private AccountType accountType;
+
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal balance;
 
