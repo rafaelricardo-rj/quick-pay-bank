@@ -10,14 +10,16 @@ import com.codemich.quickpaybank.shared.exception.InsufficientFundsException;
 import com.codemich.quickpaybank.shared.exception.ResourceNotFoundException;
 import com.codemich.quickpaybank.transfer.audit.TransferAuditService;
 import com.codemich.quickpaybank.transfer.dto.TransferRequest;
+import com.codemich.quickpaybank.transfer.validation.CheckingTransferValidation;
+import com.codemich.quickpaybank.transfer.validation.SavingsTransferValidation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -40,7 +42,6 @@ class TransferServiceTest {
     @Mock
     private TransferAuditService auditService;
 
-    @InjectMocks
     private TransferService transferService;
 
     private Customer customer;
@@ -49,6 +50,16 @@ class TransferServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Real strategy instances — they are part of the business logic being tested
+        var strategies = List.of(
+                new CheckingTransferValidation(),
+                new SavingsTransferValidation(transferRepository)
+        );
+
+        transferService = new TransferService(
+                accountRepository, transferRepository, notificationService, auditService, strategies
+        );
+
         customer = Customer.builder()
                 .id(1L)
                 .name("Ana Silva")
