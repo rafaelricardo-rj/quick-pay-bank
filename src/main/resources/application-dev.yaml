@@ -1,20 +1,14 @@
 spring:
-  application:
-    name: "quick-pay-bank"
-  main:
-    banner-mode: "off"
   config:
     activate:
       on-profile: dev
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:3307/quickpay?allowPublicKeyRetrieval=true&useSSL=false
     username: ${DB_USER:qpayuser}
     password: ${DB_PASSWD:qpaypaswd}
   jpa:
     hibernate:
-      ddl-auto: none
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
+      ddl-auto: validate
+    show-sql: true
+  flyway:
+    enabled: true
