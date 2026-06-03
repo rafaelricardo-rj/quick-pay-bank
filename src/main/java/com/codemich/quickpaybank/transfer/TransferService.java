@@ -7,6 +7,7 @@ import com.codemich.quickpaybank.notification.NotificationService;
 import com.codemich.quickpaybank.shared.exception.BusinessException;
 import com.codemich.quickpaybank.shared.exception.InsufficientFundsException;
 import com.codemich.quickpaybank.shared.exception.ResourceNotFoundException;
+import com.codemich.quickpaybank.transfer.audit.TransferAuditService;
 import com.codemich.quickpaybank.transfer.dto.TransferRequest;
 import com.codemich.quickpaybank.transfer.dto.TransferResponse;
 import lombok.RequiredArgsConstructor;
@@ -28,47 +29,57 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final NotificationService notificationService;
+    private final TransferAuditService auditService;
 
     @Transactional
     public TransferResponse transfer(TransferRequest request) {
+
         if (request.payerId().equals(request.payeeId())) {
             throw new BusinessException("Conta pagadora e recebedora não podem ser iguais");
         }
 
-        // Lock in ascending ID order to prevent deadlock under concurrent requests
-        Long firstId = Math.min(request.payerId(), request.payeeId());
-        Long secondId = Math.max(request.payerId(), request.payeeId());
+        try {
+            // Lock in ascending ID order to prevent deadlock under concurrent requests
+            Long firstId = Math.min(request.payerId(), request.payeeId());
+            Long secondId = Math.max(request.payerId(), request.payeeId());
 
-        Account first = accountRepository.findByIdWithLock(firstId)
-                .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada: " + firstId));
-        Account second = accountRepository.findByIdWithLock(secondId)
-                .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada: " + secondId));
+            Account first = accountRepository.findByIdWithLock(firstId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada: " + firstId));
+            Account second = accountRepository.findByIdWithLock(secondId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada: " + secondId));
 
-        Account payer = request.payerId().equals(firstId) ? first : second;
-        Account payee = request.payerId().equals(firstId) ? second : first;
+            Account payer = request.payerId().equals(firstId) ? first : second;
+            Account payee = request.payerId().equals(firstId) ? second : first;
 
-        validateTransferRules(payer, request.amount());
+            validateTransferRules(payer, request.amount());
 
-        payer.setBalance(payer.getBalance().subtract(request.amount()));
-        payee.setBalance(payee.getBalance().add(request.amount()));
+            payer.setBalance(payer.getBalance().subtract(request.amount()));
+            payee.setBalance(payee.getBalance().add(request.amount()));
 
-        Transfer transfer = transferRepository.save(Transfer.builder()
-                .payer(payer)
-                .payee(payee)
-                .amount(request.amount())
-                .status(TransferStatus.COMPLETED)
-                .build());
+            Transfer transfer = transferRepository.save(Transfer.builder()
+                    .payer(payer)
+                    .payee(payee)
+                    .amount(request.amount())
+                    .build());
 
-        // Resolve customer data inside the transaction to avoid LazyInitializationException in async thread
-        String payeeEmail = payee.getCustomer().getEmail();
-        String payerName = payer.getCustomer().getName();
+            // Resolve customer data inside the transaction to avoid LazyInitializationException in async thread
+            String payeeEmail = payee.getCustomer().getEmail();
+            String payerName = payer.getCustomer().getName();
 
-        notificationService.notify(
-                payeeEmail,
-                String.format("Transferência de R$ %.2f recebida de %s", request.amount(), payerName)
-        );
+            notificationService.notify(
+                    payeeEmail,
+                    String.format("Transferência de R$ %.2f recebida de %s", request.amount(), payerName)
+            );
 
-        return TransferResponse.from(transfer);
+            auditService.logSuccess(request.payerId(), request.payeeId(), request.amount());
+
+            return TransferResponse.from(transfer);
+
+        } catch (Exception e) {
+            // logFailure uses REQUIRES_NEW — commits independently even though this transaction rolls back
+            auditService.logFailure(request.payerId(), request.payeeId(), request.amount(), e.getMessage());
+            throw e;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -87,9 +98,11 @@ public class TransferService {
     }
 
     private void validateTransferRules(Account payer, BigDecimal amount) {
+
         if (payer.getBalance().compareTo(amount) < 0) {
             throw new InsufficientFundsException("Saldo insuficiente. Disponível: R$ " + payer.getBalance());
         }
+
 
         if (payer.getAccountType() == AccountType.SAVINGS) {
             if (amount.compareTo(SAVINGS_PER_TRANSFER_LIMIT) > 0) {
@@ -101,7 +114,7 @@ public class TransferService {
             LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
             LocalDateTime endOfDay = startOfDay.plusDays(1);
             BigDecimal dailyTotal = transferRepository.findDailyOutgoingAmount(
-                    payer.getId(), TransferStatus.COMPLETED, startOfDay, endOfDay
+                    payer.getId(), startOfDay, endOfDay
             );
 
             if (dailyTotal.add(amount).compareTo(SAVINGS_DAILY_LIMIT) > 0) {

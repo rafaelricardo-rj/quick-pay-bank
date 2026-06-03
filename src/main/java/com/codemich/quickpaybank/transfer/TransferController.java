@@ -1,5 +1,7 @@
 package com.codemich.quickpaybank.transfer;
 
+import com.codemich.quickpaybank.transfer.audit.TransferAuditService;
+import com.codemich.quickpaybank.transfer.audit.dto.TransferAuditResponse;
 import com.codemich.quickpaybank.transfer.dto.TransferRequest;
 import com.codemich.quickpaybank.transfer.dto.TransferResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,7 @@ import java.util.List;
 public class TransferController {
 
     private final TransferService transferService;
+    private final TransferAuditService auditService;
 
     @PostMapping
     @Operation(
@@ -50,5 +53,15 @@ public class TransferController {
     @ApiResponse(responseCode = "200", description = "Extrato da conta")
     public ResponseEntity<List<TransferResponse>> findByAccountId(@PathVariable Long accountId) {
         return ResponseEntity.ok(transferService.findByAccountId(accountId));
+    }
+
+    @GetMapping("/audit/account/{accountId}")
+    @Operation(
+            summary = "Auditoria da conta",
+            description = "Retorna todas as tentativas de transferência (sucesso e falha) de uma conta"
+    )
+    @ApiResponse(responseCode = "200", description = "Histórico de auditoria")
+    public ResponseEntity<List<TransferAuditResponse>> findAuditByAccountId(@PathVariable Long accountId) {
+        return ResponseEntity.ok(auditService.findByAccountId(accountId));
     }
 }

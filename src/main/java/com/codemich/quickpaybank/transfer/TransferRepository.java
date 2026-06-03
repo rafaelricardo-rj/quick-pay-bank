@@ -14,13 +14,11 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
             SELECT COALESCE(SUM(t.amount), 0)
             FROM Transfer t
             WHERE t.payer.id = :payerId
-              AND t.status = :status
               AND t.createdAt >= :startOfDay
               AND t.createdAt < :endOfDay
             """)
     BigDecimal findDailyOutgoingAmount(
             @Param("payerId") Long payerId,
-            @Param("status") TransferStatus status,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay
     );
