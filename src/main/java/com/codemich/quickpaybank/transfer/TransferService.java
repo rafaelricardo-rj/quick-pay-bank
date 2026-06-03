@@ -10,26 +10,37 @@ import com.codemich.quickpaybank.shared.exception.ResourceNotFoundException;
 import com.codemich.quickpaybank.transfer.audit.TransferAuditService;
 import com.codemich.quickpaybank.transfer.dto.TransferRequest;
 import com.codemich.quickpaybank.transfer.dto.TransferResponse;
-import lombok.RequiredArgsConstructor;
+import com.codemich.quickpaybank.transfer.validation.TransferValidationStrategy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class TransferService {
-
-    private static final BigDecimal SAVINGS_PER_TRANSFER_LIMIT = new BigDecimal("2000.00");
-    private static final BigDecimal SAVINGS_DAILY_LIMIT = new BigDecimal("5000.00");
 
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final NotificationService notificationService;
     private final TransferAuditService auditService;
+    private final Map<AccountType, TransferValidationStrategy> validationStrategies;
+
+    public TransferService(AccountRepository accountRepository,
+                           TransferRepository transferRepository,
+                           NotificationService notificationService,
+                           TransferAuditService auditService,
+                           List<TransferValidationStrategy> strategies) {
+        this.accountRepository = accountRepository;
+        this.transferRepository = transferRepository;
+        this.notificationService = notificationService;
+        this.auditService = auditService;
+        this.validationStrategies = strategies.stream()
+                .collect(Collectors.toMap(TransferValidationStrategy::supports, Function.identity()));
+    }
 
     @Transactional
     public TransferResponse transfer(TransferRequest request) {
@@ -51,7 +62,11 @@ public class TransferService {
             Account payer = request.payerId().equals(firstId) ? first : second;
             Account payee = request.payerId().equals(firstId) ? second : first;
 
-            validateTransferRules(payer, request.amount());
+            if (payer.getBalance().compareTo(request.amount()) < 0) {
+                throw new InsufficientFundsException("Saldo insuficiente. Disponível: R$ " + payer.getBalance());
+            }
+
+            validationStrategies.get(payer.getAccountType()).validate(payer, request.amount());
 
             payer.setBalance(payer.getBalance().subtract(request.amount()));
             payee.setBalance(payee.getBalance().add(request.amount()));
@@ -95,34 +110,5 @@ public class TransferService {
                 .stream()
                 .map(TransferResponse::from)
                 .toList();
-    }
-
-    private void validateTransferRules(Account payer, BigDecimal amount) {
-
-        if (payer.getBalance().compareTo(amount) < 0) {
-            throw new InsufficientFundsException("Saldo insuficiente. Disponível: R$ " + payer.getBalance());
-        }
-
-
-        if (payer.getAccountType() == AccountType.SAVINGS) {
-            if (amount.compareTo(SAVINGS_PER_TRANSFER_LIMIT) > 0) {
-                throw new BusinessException(
-                        "Conta Poupança: limite por transferência é R$ 2.000,00. Valor solicitado: R$ " + amount
-                );
-            }
-
-            LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-            LocalDateTime endOfDay = startOfDay.plusDays(1);
-            BigDecimal dailyTotal = transferRepository.findDailyOutgoingAmount(
-                    payer.getId(), startOfDay, endOfDay
-            );
-
-            if (dailyTotal.add(amount).compareTo(SAVINGS_DAILY_LIMIT) > 0) {
-                BigDecimal remaining = SAVINGS_DAILY_LIMIT.subtract(dailyTotal);
-                throw new BusinessException(
-                        "Conta Poupança: limite diário de R$ 5.000,00 excedido. Disponível hoje: R$ " + remaining
-                );
-            }
-        }
     }
 }
