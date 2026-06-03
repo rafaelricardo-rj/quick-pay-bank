@@ -1,0 +1,245 @@
+### Variáveis de ambiente
+@baseUrl = http://localhost:8080/api/v1
+
+
+######################################
+### CLIENTES
+######################################
+
+### Listar todos os clientes
+GET {{baseUrl}}/customers
+Accept: application/json
+
+###
+
+### Buscar cliente por ID
+GET {{baseUrl}}/customers/1
+Accept: application/json
+
+###
+
+### Cadastrar novo cliente
+POST {{baseUrl}}/customers
+Content-Type: application/json
+
+{
+  "name": "Diego Ferreira",
+  "document": "44444444444",
+  "email": "diego.ferreira@email.com"
+}
+
+###
+
+### Cadastrar novo cliente - CPF já existente (deve retornar 422)
+POST {{baseUrl}}/customers
+Content-Type: application/json
+
+{
+  "name": "Ana Duplicada",
+  "document": "11111111111",
+  "email": "ana.duplicada@email.com"
+}
+
+###
+
+### Cadastrar novo cliente - dados inválidos (deve retornar 400)
+POST {{baseUrl}}/customers
+Content-Type: application/json
+
+{
+  "name": "",
+  "document": "123",
+  "email": "email-invalido"
+}
+
+
+######################################
+### CONTAS
+######################################
+
+### Criar conta corrente para o cliente 4 (Diego)
+POST {{baseUrl}}/customers/accounts
+Content-Type: application/json
+
+{
+  "customerId": 4,
+  "accountType": "CHECKING",
+  "initialBalance": 5000.00
+}
+
+###
+
+### Criar conta poupança para o cliente 4 (Diego)
+POST {{baseUrl}}/customers/accounts
+Content-Type: application/json
+
+{
+  "customerId": 4,
+  "accountType": "SAVINGS",
+  "initialBalance": 2000.00
+}
+
+###
+
+### Criar conta duplicada (deve retornar 422 - cliente já possui esse tipo de conta)
+POST {{baseUrl}}/customers/accounts
+Content-Type: application/json
+
+{
+  "customerId": 1,
+  "accountType": "CHECKING",
+  "initialBalance": 1000.00
+}
+
+###
+
+### Listar todas as contas
+GET {{baseUrl}}/accounts
+Accept: application/json
+
+###
+
+### Buscar conta por ID
+GET {{baseUrl}}/accounts/1
+Accept: application/json
+
+###
+
+### Buscar conta inexistente (deve retornar 404)
+GET {{baseUrl}}/accounts/999
+Accept: application/json
+
+###
+
+### Listar contas de um cliente
+GET {{baseUrl}}/accounts/customer/1
+Accept: application/json
+
+
+######################################
+### TRANSFERÊNCIAS
+######################################
+
+### Transferência entre contas correntes (Ana → Bruno)
+### Conta 1 (Ana CHECKING R$10.000) → Conta 3 (Bruno CHECKING R$8.000)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 1,
+  "payeeId": 3,
+  "amount": 500.00
+}
+
+###
+
+### Transferência de poupança dentro do limite (Ana poupança → Bruno corrente)
+### Conta 2 (Ana SAVINGS R$5.000) → Conta 3 (Bruno CHECKING)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 2,
+  "payeeId": 3,
+  "amount": 1000.00
+}
+
+###
+
+### Transferência de poupança acima do limite por transação (deve retornar 422)
+### Limite por transferência da poupança: R$ 2.000,00
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 2,
+  "payeeId": 3,
+  "amount": 2500.00
+}
+
+###
+
+### Transferência com saldo insuficiente (deve retornar 422)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 1,
+  "payeeId": 3,
+  "amount": 99999.00
+}
+
+###
+
+### Transferência para a mesma conta (deve retornar 422)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 1,
+  "payeeId": 1,
+  "amount": 100.00
+}
+
+###
+
+### Transferência com conta inexistente (deve retornar 404)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 1,
+  "payeeId": 999,
+  "amount": 100.00
+}
+
+###
+
+### Transferência com valor zero (deve retornar 400)
+POST {{baseUrl}}/transfers
+Content-Type: application/json
+
+{
+  "payerId": 1,
+  "payeeId": 3,
+  "amount": 0
+}
+
+###
+
+### Buscar transferência por ID
+GET {{baseUrl}}/transfers/1
+Accept: application/json
+
+###
+
+### Buscar transferência inexistente (deve retornar 404)
+GET {{baseUrl}}/transfers/999
+Accept: application/json
+
+###
+
+### Extrato da conta 1 (Ana - corrente)
+GET {{baseUrl}}/transfers/account/1
+Accept: application/json
+
+###
+
+### Extrato da conta 3 (Bruno - corrente)
+GET {{baseUrl}}/transfers/account/3
+Accept: application/json
+
+
+######################################
+### AUDITORIA
+######################################
+
+### Auditoria da conta 1 (Ana - corrente) — exibe SUCCESS e FAILED
+GET {{baseUrl}}/transfers/audit/account/1
+Accept: application/json
+
+###
+
+### Auditoria da conta 2 (Ana - poupança)
+GET {{baseUrl}}/transfers/audit/account/2
+Accept: application/json
